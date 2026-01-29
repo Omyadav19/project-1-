@@ -17,12 +17,18 @@ class TTSQueue {
   }
 
   enqueue(text, fetchAudioFn) {
-    if (!text || !text.trim()) return;
-    // dedupe identical consecutive texts
-    if (this.lastPlayed === text) return;
-    this.queue.push({ text, fetchAudioFn });
-    this._run();
-  }
+  if (!text || !text.trim()) return;
+
+  // ✅ Prevent replay of same text
+  if (this.lastPlayed === text) return;
+
+  // ✅ Prevent duplicate queue entries
+  if (this.queue.some(item => item.text === text)) return;
+
+  this.queue.push({ text, fetchAudioFn });
+  this._run();
+}
+
 
   async _run() {
     if (this.running) return;
@@ -185,7 +191,7 @@ const TherapySessionPage = () => {
 
     if (user && !welcomeMessageSent) {
       const welcomeText =
-        "Welcome to your therapy session. This is your safe space to talk about anything on your mind. I'm here to listen without any judgment.";
+        "Hello myself PureSoul,Welcome to your therapy session. This is your safe space to talk about anything on your mind. I'm here to listen without any judgment.";
 
       // protect against duplicate initial message if messages already contain same text
       const alreadyHasWelcome = messages.some(
@@ -229,7 +235,7 @@ const TherapySessionPage = () => {
   const therapeuticResponse = await getTherapeuticResponse(inputMessage, [...messages, userMessage]);
   
   // 🔹 Preload audio while we prepare message
-  const audioBuffer = await fetchTTSAudioArrayBuffer(therapeuticResponse);
+  //const audioBuffer = await fetchTTSAudioArrayBuffer(therapeuticResponse);
 
   setIsTyping(false);
 
@@ -242,9 +248,11 @@ const TherapySessionPage = () => {
 
   // 🔹 Append text message & play audio together
   setMessages((prev) => [...prev, therapistMessage]);
-  if (audioBuffer) {
-    ttsQueueRef.current?.enqueue(therapistMessage.text, async () => audioBuffer);
-  }
+  ttsQueueRef.current?.enqueue(
+  therapistMessage.text,
+  fetchTTSAudioArrayBuffer
+);
+
 };
 
 
