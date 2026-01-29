@@ -19,9 +19,51 @@ app.use(cors());
 // --- 3. INITIALIZE API CLIENTS AND DATABASE ---
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY }); 
 
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB connected successfully."))
-  .catch(err => console.error("MongoDB connection error:", err));
+const dns = require('dns');
+const dnsPromises = dns.promises;
+
+async function connectWithDnsFallback() {
+  const uri = process.env.MONGO_URI;
+  //console.log("FINAL MONGO_URI=", uri);
+
+  // try SRV resolution first (driver uses SRV for mongodb+srv)
+  const hostMatch = uri && uri.match(/@([^/]+)\//);
+  const host = hostMatch ? hostMatch[1] : '';
+  const srvName = `_mongodb._tcp.${host}`;
+
+  try {
+    await dnsPromises.resolveSrv(srvName);
+    //console.log('SRV DNS lookup succeeded for', srvName);
+  } catch (err) {
+    //console.warn('SRV lookup failed:', err && err.code, err && err.message);
+    //console.warn('Setting process DNS servers to Google (8.8.8.8, 8.8.4.4) and retrying SRV lookup');
+    dns.setServers(['8.8.8.8', '8.8.4.4']);
+    try {
+      await dnsPromises.resolveSrv(srvName);
+      //console.log('SRV DNS lookup succeeded after forcing Google DNS');
+    } catch (err2) {
+      console.warn('SRV lookup still failing after forcing DNS:', err2 && err2.code);
+      // continue — the driver will still attempt and produce an error we log below
+    }
+  }
+
+  const mongooseOptions = {
+    tls: true,
+    connectTimeoutMS: 10000,
+    serverSelectionTimeoutMS: 10000
+  };
+
+  mongoose.connect(uri, mongooseOptions)
+    .then(() => console.log("✅ MongoDB connected"))
+    .catch(err => {
+      console.error("❌ MongoDB connection error:");
+      console.error("Code:", err && err.code);
+      console.error("Message:", err && err.message);
+      console.error("Full error:", err);
+    });
+}
+
+connectWithDnsFallback();
 
 // --- 4. DEFINE DATABASE MODELS ---
 const userSchema = new mongoose.Schema({
@@ -110,7 +152,7 @@ app.post('/api/text-to-speech', async (req, res) => {
   }
 });
 
-
+//helloo ithis is chnage mae 
 // REGISTER
 app.post('/api/register', async (req, res) => {
   try {
@@ -129,7 +171,7 @@ app.post('/api/register', async (req, res) => {
 
     res.json({ message: "Account created" });
   } catch (err) {
-    console.error("Register error:", err);
+    //console.error("Register error:", err);
     res.status(500).json({ message: "Registration failed" });
   }
 });
