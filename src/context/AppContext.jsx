@@ -1,5 +1,4 @@
 import { createContext, useContext, useState } from 'react';
-import { verifySessionToken } from '../utils/auth.js';
 
 const AppContext = createContext(undefined);
 
@@ -13,17 +12,13 @@ export const useApp = () => {
 
 export const AppProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
-    // Check for existing session on app load
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      try {
-        const verifiedUser = verifySessionToken(token);
-        return verifiedUser;
-      } catch (error) {
-        console.warn('Token verification failed, clearing invalid token:', error.message);
-        localStorage.removeItem('authToken');
-        return null;
-      }
+    // Load persisted user (stored at login) to survive page reloads.
+    try {
+      const stored = localStorage.getItem('authUser');
+      if (stored) return JSON.parse(stored);
+    } catch (err) {
+      console.warn('Failed to parse stored user:', err);
+      localStorage.removeItem('authUser');
     }
     return null;
   });
@@ -42,6 +37,7 @@ export const AppProvider = ({ children }) => {
   
   const logout = () => {
     localStorage.removeItem('authToken');
+    localStorage.removeItem('authUser');
     setUser(null);
   };
 

@@ -45,6 +45,13 @@ class MediaPipeEmotionDetector {
     };
     
     this.emotions = ['neutral', 'happy', 'sad', 'angry', 'surprised', 'fear', 'disgust'];
+
+    // Calibration and smoothing state
+    this.calibrationFrames = 10; // number of frames to build neutral baseline (reduced for faster readiness)
+    this._calibrationCount = 0;
+    this._baseline = {}; // blendshape baseline averages
+    this.smoothingSize = 4; // temporal smoothing window (smaller for more responsiveness)
+    this._recentEmotionScores = []; // circular buffer of recent normalized score vectors
   }
 
   async initialize() {
@@ -61,18 +68,32 @@ class MediaPipeEmotionDetector {
       const vision = await FilesetResolver.forVisionTasks(
         'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
       );
-      
-      // Create Face Landmarker with blendshapes
-      this.faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
-          delegate: 'GPU'
-        },
-        outputFaceBlendshapes: true,
-        outputFacialTransformationMatrixes: true,
-        runningMode: 'VIDEO',
-        numFaces: 1
-      });
+
+      // Try GPU delegate first, fall back to CPU if GPU is unavailable
+      try {
+        this.faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+            delegate: 'GPU'
+          },
+          outputFaceBlendshapes: true,
+          outputFacialTransformationMatrixes: true,
+          runningMode: 'VIDEO',
+          numFaces: 1
+        });
+      } catch (gpuErr) {
+        console.warn('GPU delegate failed, retrying with CPU delegate:', gpuErr);
+        // Retry with CPU (or without specifying delegate)
+        this.faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'
+          },
+          outputFaceBlendshapes: true,
+          outputFacialTransformationMatrixes: true,
+          runningMode: 'VIDEO',
+          numFaces: 1
+        });
+      }
       
       this.isInitialized = true;
       console.log('MediaPipe Face Landmarker initialized successfully');
@@ -91,10 +112,35 @@ class MediaPipeEmotionDetector {
     if (!blendshapes || blendshapes.length === 0) {
       return { emotion: 'neutral', confidence: 0.5, allScores: {} };
     }
+    // Convert blendshapes array into a lookup map
+    const shapeMap = {};
+    blendshapes.forEach(b => { shapeMap[b.categoryName] = b.score; });
 
-    // Initialize emotion scores
+    // If still calibrating, accumulate baseline then return neutral
+    if (this._calibrationCount < this.calibrationFrames) {
+      // accumulate averages
+      blendshapes.forEach(b => {
+        if (!this._baseline[b.categoryName]) this._baseline[b.categoryName] = 0;
+        this._baseline[b.categoryName] += b.score;
+      });
+      this._calibrationCount += 1;
+      if (this._calibrationCount === this.calibrationFrames) {
+        // finalize baseline averages
+        Object.keys(this._baseline).forEach(k => { this._baseline[k] = this._baseline[k] / this.calibrationFrames; });
+      }
+      return { emotion: 'neutral', confidence: 0.35, allScores: { neutral: 0.35 } };
+    }
+
+    // Adjust each blendshape score by subtracting baseline (reduce personal idiosyncrasies)
+    const adjusted = {};
+    blendshapes.forEach(b => {
+      const baseline = this._baseline[b.categoryName] || 0;
+      adjusted[b.categoryName] = Math.max(0, b.score - baseline * 0.8); // subtract a portion of baseline
+    });
+
+    // Build weighted emotion scores using multiple contributing blendshapes and stronger logic
     const emotionScores = {
-      neutral: 0.3, // Base neutral score
+      neutral: 0.1,
       happy: 0,
       sad: 0,
       angry: 0,
@@ -103,39 +149,96 @@ class MediaPipeEmotionDetector {
       disgust: 0
     };
 
-    // Analyze blendshapes and map to emotions
-    blendshapes.forEach(blendshape => {
-      const shapeName = blendshape.categoryName;
-      const score = blendshape.score;
-      
-      if (this.emotionMapping[shapeName]) {
-        const emotion = this.emotionMapping[shapeName];
-        emotionScores[emotion] += score;
+    // Helper to read adjusted scores
+    const s = (name) => adjusted[name] || 0;
+
+    // Weighted contributions (more robust, based on multiple cues)
+    // Happiness: lip corner up (smile) + cheek raise
+    const smile = Math.max(s('mouthSmileLeft'), s('mouthSmileRight'));
+    const cheek = (s('cheekSquintLeft') + s('cheekSquintRight')) / 2;
+    emotionScores.happy += smile * 0.7 + cheek * 0.5;
+
+    // Sad: lip corner down + inner brow down
+    const frown = Math.max(s('mouthFrownLeft'), s('mouthFrownRight'));
+    const browDown = (s('browDownLeft') + s('browDownRight')) / 2;
+    emotionScores.sad += frown * 0.7 + browDown * 0.6;
+
+    // Angry: brow lowerer + eye squint + nostril flare
+    const browLowerer = (s('browLowererLeft') + s('browLowererRight')) / 2;
+    const eyeSquint = (s('eyeSquintLeft') + s('eyeSquintRight')) / 2;
+    const nostril = (s('noseSneerLeft') + s('noseSneerRight')) / 2;
+    emotionScores.angry += browLowerer * 0.7 + eyeSquint * 0.4 + nostril * 0.25;
+
+    // Surprise: wide eyes + raised brows + jaw open
+    const eyeWide = (s('eyeWideLeft') + s('eyeWideRight')) / 2;
+    const browInnerUp = s('browInnerUp');
+    const jawOpen = s('jawOpen');
+    emotionScores.surprised += eyeWide * 0.7 + browInnerUp * 0.6 + jawOpen * 0.5;
+
+    // Fear: similar to surprise but with tension: eye wide + brow inner up + less jaw open + mouth stretch
+    const mouthStretch = (s('mouthStretchLeft') || 0) + (s('mouthStretchRight') || 0);
+    emotionScores.fear += eyeWide * 0.5 + browInnerUp * 0.4 + (1 - Math.min(1, jawOpen)) * 0.2 + mouthStretch * 0.2;
+
+    // Disgust: nose sneer + upper lip raise
+    const upperLip = (s('mouthUpperUpLeft') + s('mouthUpperUpRight')) / 2;
+    emotionScores.disgust += nostril * 0.7 + upperLip * 0.6;
+
+    // Reduce neutral if any emotion appears
+    const maxEmotionScore = Math.max(
+      emotionScores.happy, emotionScores.sad, emotionScores.angry,
+      emotionScores.surprised, emotionScores.fear, emotionScores.disgust
+    );
+    emotionScores.neutral = Math.max(0.02, 0.15 - maxEmotionScore * 0.5);
+
+    // Apply some cross-check adjustments (avoid confusing surprise & fear)
+    if (emotionScores.surprised > 0.6 && emotionScores.fear > 0.4) {
+      // prefer fear if mouth is tense / jaw not open
+      if (jawOpen < 0.15) {
+        emotionScores.fear += 0.2;
+        emotionScores.surprised -= 0.15;
       }
+    }
+
+    // Assemble vector and normalize using softmax-like scaling for better confidence distribution
+    const rawVector = this.emotions.map(e => Math.max(0, emotionScores[e] || 0));
+    const softmax = this._softmax(rawVector);
+
+    // Map back to object
+    const normalizedScores = {};
+    this.emotions.forEach((e, i) => { normalizedScores[e] = softmax[i]; });
+
+    // Temporal smoothing: keep running buffer of recent normalized scores
+    this._recentEmotionScores.push(normalizedScores);
+    if (this._recentEmotionScores.length > this.smoothingSize) this._recentEmotionScores.shift();
+
+    // Average across buffer
+    const averaged = {};
+    this.emotions.forEach(e => {
+      averaged[e] = this._recentEmotionScores.reduce((acc, s) => acc + (s[e] || 0), 0) / this._recentEmotionScores.length;
     });
 
-    // Apply emotion-specific logic
-    this.applyEmotionLogic(emotionScores, blendshapes);
-
-    // Find dominant emotion
+    // Find dominant after smoothing
     let dominantEmotion = 'neutral';
-    let maxScore = emotionScores.neutral;
-    
-    Object.entries(emotionScores).forEach(([emotion, score]) => {
-      if (score > maxScore) {
-        maxScore = score;
-        dominantEmotion = emotion;
-      }
+    let maxScore = averaged.neutral;
+    Object.entries(averaged).forEach(([emotion, score]) => {
+      if (score > maxScore) { maxScore = score; dominantEmotion = emotion; }
     });
 
-    // Normalize confidence (0-1 range)
-    const confidence = Math.min(1.0, Math.max(0.1, maxScore));
+    const confidence = Math.min(0.999, Math.max(0.02, maxScore));
 
     return {
       emotion: dominantEmotion,
       confidence: confidence,
-      allScores: emotionScores
+      allScores: averaged
     };
+  }
+
+  _softmax(arr) {
+    // small stable softmax
+    const max = Math.max(...arr);
+    const exps = arr.map(v => Math.exp((v - max) * 6)); // sharpen factor
+    const sum = exps.reduce((a, b) => a + b, 0) || 1;
+    return exps.map(e => e / sum);
   }
 
   applyEmotionLogic(emotionScores, blendshapes) {
@@ -234,8 +337,11 @@ class MediaPipeEmotionDetector {
       const ctx = canvasElement.getContext('2d');
       ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
       
-      // Detect faces and blendshapes
-      const results = this.faceLandmarker.detectForVideo(videoElement, performance.now());
+      // Detect faces and blendshapes (detectForVideo may be sync or return a promise)
+      let results = this.faceLandmarker.detectForVideo(videoElement, performance.now());
+      if (results && typeof results.then === 'function') {
+        results = await results;
+      }
       
       if (!results.faceBlendshapes || results.faceBlendshapes.length === 0) {
         return null;

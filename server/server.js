@@ -19,48 +19,71 @@ app.use(cors());
 // --- 3. INITIALIZE API CLIENTS AND DATABASE ---
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY }); 
 
+// ---------- GROQ RETRY + FALLBACK ----------
+const GROQ_MODELS = [
+  "moonshotai/kimi-k2-instruct",
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant"
+];
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function groqWithRetry(messages, maxRetries = 3) {
+  let lastError;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    for (const model of GROQ_MODELS) {
+      try {
+        return await groq.chat.completions.create({
+          model,
+          messages
+        });
+      } catch (err) {
+        lastError = err;
+
+        if (err?.status === 503) {
+          const retryAfter =
+            Number(err.headers?.['retry-after'] || 15) * 1000;
+
+          console.warn(
+            `Groq overload on ${model}. Retrying in ${retryAfter / 1000}s`
+          );
+
+          await sleep(retryAfter);
+          continue;
+        }
+
+        throw err;
+      }
+    }
+  }
+
+  throw lastError;
+}
+// ------------------------------------------
+
 const dns = require('dns');
 const dnsPromises = dns.promises;
 
 async function connectWithDnsFallback() {
   const uri = process.env.MONGO_URI;
-  //console.log("FINAL MONGO_URI=", uri);
-
-  // try SRV resolution first (driver uses SRV for mongodb+srv)
   const hostMatch = uri && uri.match(/@([^/]+)\//);
   const host = hostMatch ? hostMatch[1] : '';
   const srvName = `_mongodb._tcp.${host}`;
 
   try {
     await dnsPromises.resolveSrv(srvName);
-    //console.log('SRV DNS lookup succeeded for', srvName);
-  } catch (err) {
-    //console.warn('SRV lookup failed:', err && err.code, err && err.message);
-    //console.warn('Setting process DNS servers to Google (8.8.8.8, 8.8.4.4) and retrying SRV lookup');
+  } catch {
     dns.setServers(['8.8.8.8', '8.8.4.4']);
-    try {
-      await dnsPromises.resolveSrv(srvName);
-      //console.log('SRV DNS lookup succeeded after forcing Google DNS');
-    } catch (err2) {
-      console.warn('SRV lookup still failing after forcing DNS:', err2 && err2.code);
-      // continue — the driver will still attempt and produce an error we log below
-    }
   }
 
-  const mongooseOptions = {
+  mongoose.connect(uri, {
     tls: true,
     connectTimeoutMS: 10000,
     serverSelectionTimeoutMS: 10000
-  };
-
-  mongoose.connect(uri, mongooseOptions)
-    .then(() => console.log("✅ MongoDB connected"))
-    .catch(err => {
-      console.error("❌ MongoDB connection error:");
-      console.error("Code:", err && err.code);
-      console.error("Message:", err && err.message);
-      console.error("Full error:", err);
-    });
+  })
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch(err => console.error("❌ MongoDB connection error:", err));
 }
 
 connectWithDnsFallback();
@@ -72,6 +95,7 @@ const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true, lowercase: true },
   password: { type: String, required: true },
 }, { timestamps: true });
+
 const User = mongoose.model('User', userSchema, 'usertable');
 
 // --- 5. DEFINE ALL API ENDPOINTS ---
@@ -79,46 +103,63 @@ const User = mongoose.model('User', userSchema, 'usertable');
 // CHATBOT RESPONSE ENDPOINT
 app.post('/api/get-response', async (req, res) => {
   try {
-    const { userMessage, messageHistory } = req.body;
-    const systemPrompt = `
-You are a warm, emotionally intelligent AI who responds like a real human—a close friend and a gentle therapist combined.
-Keep every response strictly 2–3 short lines.
-First acknowledge feelings, then offer calm emotional support using natural, human language.
-Match the user’s language exactly: reply only in Hindi (or Hinglish) if the user uses it; otherwise reply in English.
-Use 1–2 subtle, natural emojis when appropriate to express care (never overuse).
+    const { userMessage, messageHistory, emotion, specialty, specialtyPrompt } = req.body;
 
-CRITICAL SAFETY RULE:
-If the user mentions suicide, dying, self-harm, or wanting to disappear, respond with a strong, compassionate human reaction:
-– Clearly show care and concern
-– Tell them their life matters
-– Encourage them to reach out to a trusted person or local emergency/help resources
-– Do NOT give methods, instructions, or normalize self-harm
-– Stay supportive, present, and non-judgmental
+    // Base system prompt: concise, casual therapist voice
+    const basePrompt = `You are a calm, cozy, professional therapist who speaks like a caring friend on WhatsApp: brief, warm, and practical.
+  Keep replies very short — 1–2 short sentences or lines. Open by acknowledging feelings, then offer one practical next step or coping idea.
+  Use casual, friendly language (light humor occasionally to ease tension), keep tone soothing and respectful, and include 1 simple emoji when it fits.
+  Be practical and action-oriented but gentle — avoid long explanations or clinical lists unless asked.
 
-Never sound robotic, clinical, dismissive, or preachy.
-Never use asterisks or markdown
-    `;
+  If the user mixes languages, mirror their language (reply in Hinglish if they do).
+
+  CRITICAL: If the user mentions suicide, self-harm, or imminent danger, respond with urgent, non-judgmental care, say their life matters, encourage contacting emergency services or trusted people immediately, provide crisis hotline suggestions, and do NOT provide methods or instructions.`;
+
+    // Specialty guidance (prefer specialtyPrompt if provided)
+    const specialtyInstruction = specialtyPrompt
+      || (specialty ? `Focus the session on ${specialty}. Tailor your language and suggestions to ${specialty}.` : 'Provide empathetic, open-ended emotional support.');
+
+    // Mood-specific guidance (gentle modifiers)
+    const moodInstructionMap = {
+      sad: 'Be extra gentle and validating; normalize feelings and encourage small supportive steps.',
+      angry: 'Acknowledge the intensity; provide calming suggestions and encourage safe expression.',
+      happy: 'Reinforce positive feelings and invite reflection on what is working well.',
+      surprised: 'Invite exploration about the surprise and its context in a calm manner.',
+      fear: 'Use reassuring language and suggest grounding techniques.',
+      disgust: 'Acknowledge the discomfort and offer space to describe what feels off.',
+      neutral: 'Maintain a warm, open tone and invite sharing.'
+    };
+
+    const moodInstruction = emotion ? (moodInstructionMap[emotion] || '') : '';
+
+    const systemPrompt = [basePrompt, specialtyInstruction, moodInstruction].filter(Boolean).join('\n\n');
 
     const conversationHistory = [
       { role: "system", content: systemPrompt },
-      ...messageHistory.map(m => ({ role: m.sender === 'user' ? 'user' : 'assistant', content: m.text })),
+      ...messageHistory.map(m => ({
+        role: m.sender === 'user' ? 'user' : 'assistant',
+        content: m.text
+      })),
       { role: "user", content: userMessage }
     ];
 
-    const chatCompletion = await groq.chat.completions.create({
-      messages: conversationHistory,
-      model: "moonshotai/kimi-k2-instruct",
-    });
+    const chatCompletion = await groqWithRetry(conversationHistory);
 
-    const responseText = chatCompletion.choices[0]?.message?.content || "I'm here to listen. Tell me more.";
+    const responseText =
+      chatCompletion.choices[0]?.message?.content ||
+      "I'm here with you. Tell me what’s going on.";
+
     res.json({ therapistResponse: responseText });
+
   } catch (error) {
-    console.error("Groq error:", error);
-    res.status(500).json({ error: "AI failed to respond" });
+    console.error("Groq error:", error?.message || error);
+    res.status(503).json({
+      error: "AI is busy right now. Please try again in a few seconds."
+    });
   }
 });
 
-// TEXT TO SPEECH ENDPOINT (FIXED)
+// TEXT TO SPEECH ENDPOINT
 app.post('/api/text-to-speech', async (req, res) => {
   try {
     const { text } = req.body;
@@ -128,10 +169,8 @@ app.post('/api/text-to-speech', async (req, res) => {
       .replace(/\*.*?\*/g, '')
       .replace(/[\u{1F600}-\u{1F64F}]/gu, '');
 
-    const voiceId = "21m00Tcm4TlvDq8ikWAM"; // Rachel therapist voice
-
     const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`,
+      `https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM/stream`,
       {
         method: "POST",
         headers: {
@@ -140,28 +179,22 @@ app.post('/api/text-to-speech', async (req, res) => {
         },
         body: JSON.stringify({
           text: cleanedText,
-          model_id: "eleven_multilingual_v2",
-          voice_settings: {
-            stability: 0.4,
-            similarity_boost: 0.8
-          }
+          model_id: "eleven_multilingual_v2"
         })
       }
     );
 
-    if (!response.ok) {
-      const err = await response.text();
-      throw new Error(err);
-    }
+    if (!response.ok) throw new Error(await response.text());
 
     res.setHeader("Content-Type", "audio/mpeg");
     response.body.pipe(res);
+
   } catch (error) {
     console.error("ElevenLabs error:", error);
     res.status(500).json({ error: "Speech generation failed" });
   }
 });
- 
+
 // REGISTER
 app.post('/api/register', async (req, res) => {
   try {
@@ -175,12 +208,11 @@ app.post('/api/register', async (req, res) => {
     if (exists) return res.status(400).json({ message: "User already exists" });
 
     const hashed = await bcrypt.hash(password, 10);
-    const user = new User({ name, email, username, password: hashed });
-    await user.save();
+    await new User({ name, email, username, password: hashed }).save();
 
     res.json({ message: "Account created" });
-  } catch (err) {
-    //console.error("Register error:", err);
+
+  } catch {
     res.status(500).json({ message: "Registration failed" });
   }
 });
@@ -190,18 +222,22 @@ app.post('/api/login', async (req, res) => {
   try {
     const { identifier, password } = req.body;
 
-    const user = await User.findOne({ $or: [{ email: identifier }, { username: identifier }] });
-    if (!user) return res.status(400).json({ message: "Invalid credentials" });
+    const user = await User.findOne({
+      $or: [{ email: identifier }, { username: identifier }]
+    });
 
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(400).json({ message: "Invalid credentials" });
+    if (!user || !(await bcrypt.compare(password, user.password)))
+      return res.status(400).json({ message: "Invalid credentials" });
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "24h" });
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "24h"
+    });
 
     res.json({
       token,
       user: { id: user._id, name: user.name, username: user.username, email: user.email }
     });
+
   } catch (err) {
     console.error("Login error:", err);
     res.status(500).json({ message: "Login failed" });

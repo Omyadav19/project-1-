@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Heart, MessageCircle, Mic, MicOff, Home, User, Brain, Shield, Lightbulb } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
 import useSpeechRecognition from '../hooks/useSpeechRecognition';
 
@@ -115,6 +115,10 @@ const fetchTTSAudioArrayBuffer = async (text) => {
 const TherapySessionPage = () => {
   const navigate = useNavigate();
   const { user, addTherapySession, setSadDetectionCount, currentEmotion } = useApp();
+  const location = useLocation();
+  const specialtyState = location.state || {};
+  const specialtyName = specialtyState.specialtyName || 'Professional Therapy';
+  const specialtyPrompt = specialtyState.specialtyPrompt || '';
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [sessionStartTime] = useState(new Date());
@@ -129,6 +133,7 @@ const TherapySessionPage = () => {
   // audio element & queue refs
   const audioElRef = useRef(null);
   const ttsQueueRef = useRef(null);
+  const playedInitialRef = useRef(false);
 
   // initialize audio element and queue once
   useEffect(() => {
@@ -163,7 +168,9 @@ const TherapySessionPage = () => {
         body: JSON.stringify({
           userMessage,
           messageHistory: messageHistory.slice(-6),
-          emotion: currentEmotion?.emotion || 'neutral'
+          emotion: currentEmotion?.emotion || 'neutral',
+          specialty: specialtyName,
+          specialtyPrompt
         }),
       });
       if (!response.ok) {
@@ -186,22 +193,35 @@ const TherapySessionPage = () => {
 
     if (user && !welcomeMessageSent) {
       const emotion = currentEmotion?.emotion || 'neutral';
-      const welcomeText = `It seems you are feeling ${emotion}. Welcome to your therapy session. This is your safe space to talk about anything on your mind. I'm here to listen without any judgment.`;
+      // Short, friendly welcome — keep it brief
+      const welcomeText = `${specialtyName} — I notice you're feeling ${emotion}. I'm here to listen. Want to share what's on your mind?`;
 
-      // protect against duplicate initial message if messages already contain same text
-      const alreadyHasWelcome = messages.some(
-        (m) => m.sender === 'therapist' && m.text === welcomeText
-      );
-      if (!alreadyHasWelcome) {
-        const initialMessage = {
-          id: Date.now().toString(),
-          text: welcomeText,
-          sender: 'therapist',
-          timestamp: new Date(),
-        };
-        setMessages([initialMessage]);
-        // enqueue TTS (queue will fetch and play when possible)
-        ttsQueueRef.current?.enqueue(initialMessage.text, fetchTTSAudioArrayBuffer);
+      // If there are already messages, play the latest instead of inserting welcome again
+      if (messages.length > 0) {
+        const latest = messages[messages.length - 1];
+        if (latest && !playedInitialRef.current) {
+          // enqueue latest message audio if available and not already played
+          const textToPlay = latest.text;
+          if (ttsQueueRef.current && ttsQueueRef.current.lastPlayed !== textToPlay) {
+            ttsQueueRef.current.enqueue(textToPlay, fetchTTSAudioArrayBuffer);
+          }
+          playedInitialRef.current = true;
+        }
+      } else {
+        if (!playedInitialRef.current) {
+          const initialMessage = {
+            id: Date.now().toString(),
+            text: welcomeText,
+            sender: 'therapist',
+            timestamp: new Date(),
+          };
+          setMessages([initialMessage]);
+          // enqueue TTS (queue will fetch and play when possible) — guard against duplicate plays
+          if (ttsQueueRef.current && ttsQueueRef.current.lastPlayed !== initialMessage.text) {
+            ttsQueueRef.current.enqueue(initialMessage.text, fetchTTSAudioArrayBuffer);
+          }
+          playedInitialRef.current = true;
+        }
       }
       setWelcomeMessageSent(true);
     }
@@ -255,7 +275,9 @@ const TherapySessionPage = () => {
       date: sessionStartTime,
       duration: Math.floor((new Date().getTime() - sessionStartTime.getTime()) / 1000 / 60),
       messages,
-      initialEmotion: userEmotionalState || 'neutral',
+      initialEmotion: currentEmotion?.emotion || userEmotionalState || 'neutral',
+      specialty: specialtyName,
+      specialtyPrompt,
     };
     addTherapySession(session);
     setSadDetectionCount(0);
@@ -269,9 +291,21 @@ const TherapySessionPage = () => {
       startListening();
     }
   };
+  const bgClass = (() => {
+    const mood = currentEmotion?.emotion || 'neutral';
+    switch (mood) {
+      case 'happy': return 'from-green-50 via-green-100 to-cyan-100';
+      case 'sad': return 'from-blue-50 via-indigo-50 to-slate-100';
+      case 'angry': return 'from-red-50 via-orange-50 to-amber-50';
+      case 'surprised': return 'from-yellow-50 via-orange-50 to-pink-50';
+      case 'fear': return 'from-purple-50 via-pink-50 to-indigo-50';
+      case 'disgust': return 'from-lime-50 via-green-50 to-emerald-50';
+      default: return 'from-purple-50 via-blue-50 to-indigo-100';
+    }
+  })();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100">
+    <div className={`min-h-screen bg-gradient-to-br ${bgClass}`}>
       {/* Hidden audio element for TTS playback (kept in DOM, queue will use it) */}
       <audio id="tts-audio" hidden />
 

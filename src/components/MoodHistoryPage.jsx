@@ -269,6 +269,12 @@ const MoodHistoryPage = () => {
                     <p className="text-sm text-gray-600">
                       {session.messages.length} messages exchanged
                     </p>
+                    {session.specialty && (
+                      <div className="mt-3 inline-flex items-center px-3 py-1 rounded-full bg-white/60 text-sm text-gray-700 border border-gray-100">
+                        <strong className="mr-2">Therapy:</strong>
+                        <span className="capitalize">{session.specialty}</span>
+                      </div>
+                    )}
                   </motion.div>
                 ))}
               </div>

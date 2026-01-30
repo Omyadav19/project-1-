@@ -8,11 +8,14 @@ import EmotionDetectionPage from './components/EmotionDetectionPage.jsx';
 import TherapySessionPage from './components/TherapySessionPage.jsx';
 import MoodHistoryPage from './components/MoodHistoryPage.jsx';
 import DashboardPage from './components/DashboardPage.jsx';
+import TherapistSelectionPage from './components/TherapistSelection.jsx';
+import Header from './components/Header.jsx';
 
 function App() {
   return (
     <AppProvider>
       <Router>
+        <Header />
         <Routes>
           <Route path="/" element={<IntroPage />} />
           <Route path="/login" element={<LoginPage />} />
@@ -21,6 +24,7 @@ function App() {
           <Route path="/therapy-session" element={<TherapySessionPage />} />
           <Route path="/mood-history" element={<MoodHistoryPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/therapyselection" element={<TherapistSelectionPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>

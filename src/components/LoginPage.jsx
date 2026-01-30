@@ -95,6 +95,12 @@ const handleSubmit = async (e) => {
       }
       
       localStorage.setItem('authToken', data.token);
+      // Persist user object so app can restore session across reloads
+      try {
+        localStorage.setItem('authUser', JSON.stringify(data.user));
+      } catch (err) {
+        console.warn('Failed to persist user to localStorage', err);
+      }
       setUser(data.user);
       setSuccessMessage('Login successful!');
       

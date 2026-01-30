@@ -33,6 +33,7 @@ const EmotionDetectionPage = () => {
   const canvasRef = useRef(null);
   const emotionDetectorRef = useRef(null);
   const detectionIntervalRef = useRef(null);
+  const detectionFailCountRef = useRef(0);
 
   // --- UPDATED POPUP MESSAGES ---
   // Each question is now an invitation to a therapy session.
@@ -52,7 +53,11 @@ const EmotionDetectionPage = () => {
     setDetectionError(null);
     try {
       emotionDetectorRef.current = new MediaPipeEmotionDetector();
-      const success = await emotionDetectorRef.current.initialize();
+
+      // Add a timeout so the UI doesn't stay stuck if initialization hangs
+      const initPromise = emotionDetectorRef.current.initialize();
+      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Model initialization timed out')), 15000));
+      const success = await Promise.race([initPromise, timeout]);
       if (success) {
         setModelReady(true);
         console.log('MediaPipe emotion detection initialized successfully');
@@ -61,7 +66,7 @@ const EmotionDetectionPage = () => {
       }
     } catch (error) {
       console.error('Error initializing MediaPipe emotion detector:', error);
-      setDetectionError('Failed to load detection models. Please refresh and try again.');
+      setDetectionError(error.message || 'Failed to load detection models. Please refresh and try again.');
     } finally {
       setIsModelLoading(false);
     }
@@ -77,6 +82,8 @@ const EmotionDetectionPage = () => {
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
         videoRef.current.play();
+        // Initialize immediately (and again on metadata load) to reduce race conditions
+        initializeEmotionDetector();
         videoRef.current.onloadedmetadata = () => {
           initializeEmotionDetector();
         };
@@ -101,6 +108,7 @@ const EmotionDetectionPage = () => {
     try {
       const result = await emotionDetectorRef.current.detectEmotionFromVideo(videoRef.current, canvasRef.current);
       if (result) {
+        detectionFailCountRef.current = 0;
         const emotionData = {
           id: Date.now().toString(), emotion: result.emotion, confidence: result.confidence,
           timestamp: result.timestamp, allScores: result.allScores,
@@ -117,6 +125,12 @@ const EmotionDetectionPage = () => {
           }
           return newReadings;
         });
+      } else {
+        // No face / no result — increment fail counter and show helpful message after a few misses
+        detectionFailCountRef.current += 1;
+        if (detectionFailCountRef.current >= 5) {
+          setDetectionError('No face detected — please position your face clearly in the camera frame.');
+        }
       }
     } catch (error) {
       console.error('MediaPipe emotion detection error:', error);
@@ -128,7 +142,7 @@ const EmotionDetectionPage = () => {
   const handlePopupConfirm = () => {
     setShowEmotionPopup(false);
     if (dominantEmotion) {
-      navigate('/therapy-session');
+      navigate('/therapyselection');
     } else {
       setIsDetecting(true);
       setDominantEmotion(null);
