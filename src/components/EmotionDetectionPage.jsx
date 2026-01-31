@@ -44,7 +44,6 @@ const EmotionDetectionPage = () => {
     angry: { icon: '😠', color: 'from-red-400 to-red-600', component: AlertCircle, question: "You seem upset. Would you like a safe space to talk it through?" },
     surprised: { icon: '😲', color: 'from-yellow-400 to-yellow-600', component: AlertCircle, question: "You seem surprised. Would you like to explore this feeling?" },
     fear: { icon: '😨', color: 'from-purple-400 to-purple-600', component: AlertCircle, question: "You seem to be feeling fearful. Would you like a safe space to talk?" },
-    disgust: { icon: '🤢', color: 'from-green-400 to-green-600', component: AlertCircle, question: "You seem to be feeling disgust. Would you like to discuss it?" },
   };
 
   const initializeEmotionDetector = async () => {

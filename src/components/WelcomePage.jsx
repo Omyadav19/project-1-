@@ -73,50 +73,40 @@ const WelcomePage = () => {
               filter: 'blur(30px)',
             }}
           />
-          
-          <div className="absolute top-4 right-4">
-            <motion.button
-              onClick={() => { logout(); navigate('/login'); }}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="p-3 rounded-full bg-white shadow-lg hover:shadow-xl transition-all"
-              aria-label="Log out"
-            >
-              <LogOut className="w-5 h-5 text-gray-700" />
-            </motion.button>
-          </div>
+
+
 
           {/* Animated Heart Icon */}
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            transition={{ 
-              delay: 0.5, 
-              type: 'spring', 
+            transition={{
+              delay: 0.5,
+              type: 'spring',
               stiffness: 200,
-              damping: 10 
+              damping: 10
             }}
             className="relative inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-pink-500 via-purple-500 to-cyan-500 mb-8 shadow-2xl"
           >
             {/* Heart Glow */}
             <motion.div
-              animate={{ 
+              animate={{
                 scale: [1, 1.3, 1],
                 opacity: [0.5, 0.8, 0.5]
               }}
-              transition={{ 
+              transition={{
                 duration: 3,
                 repeat: Infinity,
                 ease: 'easeInOut'
               }}
               className="absolute inset-0 w-24 h-24 rounded-full bg-gradient-to-r from-pink-500 to-purple-500 blur-xl opacity-60"
             />
-            
+
             <motion.div
-              animate={{ 
+              animate={{
                 scale: [1, 1.2, 1],
               }}
-              transition={{ 
+              transition={{
                 duration: 2,
                 repeat: Infinity,
                 ease: 'easeInOut'
@@ -133,7 +123,7 @@ const WelcomePage = () => {
             transition={{ delay: 0.7 }}
             className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-pink-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent mb-6"
           >
-            Welcome, {user.name}! 
+            Welcome, {user.name}!
           </motion.h1>
 
           <motion.p
@@ -142,7 +132,7 @@ const WelcomePage = () => {
             transition={{ delay: 0.9 }}
             className="text-xl text-gray-300 mb-8 leading-relaxed"
           >
-            I'm here to support you on your emotional wellness journey. 
+            I'm here to support you on your emotional wellness journey.
             Let's begin by understanding how you're feeling today.
           </motion.p>
 
@@ -157,8 +147,8 @@ const WelcomePage = () => {
               Your Safe Space Awaits
             </h3>
             <p className="text-gray-300">
-              This is a judgment-free zone where your emotions are valid and understood. 
-              Take your time, breathe deeply, and know that you're taking a brave step 
+              This is a judgment-free zone where your emotions are valid and understood.
+              Take your time, breathe deeply, and know that you're taking a brave step
               towards better mental health.
             </p>
           </motion.div>
@@ -169,7 +159,7 @@ const WelcomePage = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 1.3 }}
             onClick={handleContinue}
-            whileHover={{ 
+            whileHover={{
               scale: 1.1,
               boxShadow: '0 25px 50px rgba(236, 72, 153, 0.4)'
             }}
@@ -180,20 +170,20 @@ const WelcomePage = () => {
             <motion.div
               className="absolute inset-0 bg-gradient-to-r from-pink-400 via-purple-400 to-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-xl"
             />
-            
+
             <span className="relative z-10 flex items-center">
-            Start Emotion Detection
-            <motion.div
-              className="ml-3"
-              animate={{ x: [0, 5, 0] }}
-              transition={{ 
-                duration: 1.5,
-                repeat: Infinity,
-                ease: 'easeInOut'
-              }}
-            >
-              <ArrowRight className="w-5 h-5" />
-            </motion.div>
+              Start Emotion Detection
+              <motion.div
+                className="ml-3"
+                animate={{ x: [0, 5, 0] }}
+                transition={{
+                  duration: 1.5,
+                  repeat: Infinity,
+                  ease: 'easeInOut'
+                }}
+              >
+                <ArrowRight className="w-5 h-5" />
+              </motion.div>
             </span>
           </motion.button>
         </motion.div>

@@ -222,7 +222,6 @@ app.post('/api/get-response', async (req, res) => {
       happy: 'Reinforce positive feelings and invite reflection on what is working well.',
       surprised: 'Invite exploration about the surprise and its context in a calm manner.',
       fear: 'Use reassuring language and suggest grounding techniques.',
-      disgust: 'Acknowledge the discomfort and offer space to describe what feels off.',
       neutral: 'Maintain a warm, open tone and invite sharing.'
     };
 

@@ -6,7 +6,7 @@ class EmotionDetector {
   constructor() {
     this.model = null;
     this.isInitialized = false;
-    this.emotions = ['angry', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise'];
+    this.emotions = ['angry', 'fear', 'happy', 'neutral', 'sad', 'surprise'];
     this.modelUrl = 'https://raw.githubusercontent.com/oarriaga/face_classification/master/trained_models/emotion_models/fer2013_mini_XCEPTION.102-0.66.hdf5';
   }
 
@@ -334,7 +334,6 @@ class EmotionDetector {
     ctx.font = '24px Arial';
     const emojis = {
       angry: '😠',
-      disgust: '🤢',
       fear: '😨',
       happy: '😊',
       neutral: '😐',

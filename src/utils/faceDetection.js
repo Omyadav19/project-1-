@@ -9,7 +9,7 @@ class AdvancedFaceDetector {
       recognition: null,
       expression: null
     };
-    this.emotions = ['neutral', 'happy', 'sad', 'angry', 'fearful', 'disgusted', 'surprised'];
+    this.emotions = ['neutral', 'happy', 'sad', 'angry', 'fearful', 'surprised'];
   }
 
   async initialize() {

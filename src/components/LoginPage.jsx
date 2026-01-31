@@ -5,9 +5,9 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext.jsx';
 import Webcam from "react-webcam";
 import { useRef } from "react";
-import { 
-  authenticateUser, 
-  createUser, 
+import {
+  authenticateUser,
+  createUser,
   generateSessionToken,
   validateEmail,
   validateUsername,
@@ -34,7 +34,7 @@ const LoginPage = () => {
   // Real-time validation
   const validateField = (field, value) => {
     const newErrors = { ...errors };
-    
+
     switch (field) {
       case 'email':
         if (value && !validateEmail(value)) {
@@ -67,74 +67,74 @@ const LoginPage = () => {
         }
         break;
     }
-    
+
     setErrors(newErrors);
   };
 
-// In LoginPage.jsx
+  // In LoginPage.jsx
 
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setIsLoading(true);
-  setErrors({});
-  setSuccessMessage('');
-  
-  try {
-    if (isLogin) {
-      // --- LOGIN API CALL ---
-      const response = await fetch('http://localhost:3001/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier, password }),
-      });
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setErrors({});
+    setSuccessMessage('');
 
-      const data = await response.json();
+    try {
+      if (isLogin) {
+        // --- LOGIN API CALL ---
+        const response = await fetch('http://localhost:3001/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier, password }),
+        });
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Login failed.');
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || 'Login failed.');
+        }
+
+        localStorage.setItem('authToken', data.token);
+        // Persist user object so app can restore session across reloads
+        try {
+          localStorage.setItem('authUser', JSON.stringify(data.user));
+        } catch (err) {
+          console.warn('Failed to persist user to localStorage', err);
+        }
+        setUser(data.user);
+        setSuccessMessage('Login successful!');
+
+        setTimeout(() => navigate('/welcome'), 1000);
+
+      } else {
+        // --- REGISTRATION API CALL ---
+        const response = await fetch('http://localhost:3001/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, username, password }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || 'Registration failed.');
+        }
+
+        setSuccessMessage('Account created successfully! Please login.');
+
+        setTimeout(() => {
+          setIsLogin(true);
+          setIdentifier(username); // Pre-fill username for convenience
+          setPassword('');
+          setSuccessMessage(''); // Clear success message
+        }, 2000);
       }
-      
-      localStorage.setItem('authToken', data.token);
-      // Persist user object so app can restore session across reloads
-      try {
-        localStorage.setItem('authUser', JSON.stringify(data.user));
-      } catch (err) {
-        console.warn('Failed to persist user to localStorage', err);
-      }
-      setUser(data.user);
-      setSuccessMessage('Login successful!');
-      
-      setTimeout(() => navigate('/welcome'), 1000);
-
-    } else {
-      // --- REGISTRATION API CALL ---
-      const response = await fetch('http://localhost:3001/api/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, username, password }),
-      });
-      
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Registration failed.');
-      }
-      
-      setSuccessMessage('Account created successfully! Please login.');
-      
-      setTimeout(() => {
-        setIsLogin(true);
-        setIdentifier(username); // Pre-fill username for convenience
-        setPassword('');
-        setSuccessMessage(''); // Clear success message
-      }, 2000);
+    } catch (error) {
+      setErrors({ general: error.message });
+    } finally {
+      setIsLoading(false);
     }
-  } catch (error) {
-    setErrors({ general: error.message });
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
   const toggleMode = () => {
     setIsLogin(!isLogin);
@@ -175,7 +175,7 @@ const handleSubmit = async (e) => {
             <Zap className="w-3 h-3 text-yellow-400 opacity-40" />
           </motion.div>
         ))}
-        
+
         {/* Floating Sparkles */}
         {[...Array(15)].map((_, i) => (
           <motion.div
@@ -216,11 +216,11 @@ const handleSubmit = async (e) => {
           className="text-center mb-8"
         >
           <motion.div
-            animate={{ 
+            animate={{
               scale: [1, 1.1, 1],
               rotate: [0, 5, -5, 0]
             }}
-            transition={{ 
+            transition={{
               duration: 4,
               repeat: Infinity,
               ease: 'easeInOut'
@@ -229,31 +229,31 @@ const handleSubmit = async (e) => {
           >
             {/* Glow Effect */}
             <motion.div
-              animate={{ 
+              animate={{
                 scale: [1, 1.2, 1],
                 opacity: [0.5, 0.8, 0.5]
               }}
-              transition={{ 
+              transition={{
                 duration: 2,
                 repeat: Infinity,
                 ease: 'easeInOut'
               }}
               className="absolute inset-0 w-20 h-20 rounded-full bg-gradient-to-r from-pink-500 to-purple-500 blur-xl opacity-60"
             />
-            
+
             <div className="relative w-20 h-20 rounded-full bg-gradient-to-br from-pink-500 via-purple-500 to-cyan-500 flex items-center justify-center shadow-2xl">
               <Heart className="w-10 h-10 text-white fill-current" />
             </div>
           </motion.div>
-          
+
           <h1 className="text-4xl font-bold bg-gradient-to-r from-pink-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent mb-3">
             {isLogin ? 'Welcome Back' : 'Join Puresoul'}
           </h1>
           <p className="text-gray-300 text-lg">
             {isLogin ? 'Continue your wellness journey' : 'Start your healing journey today'}
           </p>
-          
-           
+
+
         </motion.div>
 
         {/* Form Card */}
@@ -274,7 +274,7 @@ const handleSubmit = async (e) => {
               filter: 'blur(20px)',
             }}
           />
-          
+
           {/* Success Message */}
           {successMessage && (
             <motion.div
@@ -288,7 +288,7 @@ const handleSubmit = async (e) => {
               </div>
             </motion.div>
           )}
-          
+
           {/* General Error */}
           {errors.general && (
             <motion.div
@@ -302,7 +302,7 @@ const handleSubmit = async (e) => {
               </div>
             </motion.div>
           )}
-          
+
           <form onSubmit={handleSubmit} className="space-y-6">
             {!isLogin && (
               <motion.div
@@ -330,7 +330,7 @@ const handleSubmit = async (e) => {
                 </div>
               </motion.div>
             )}
-            
+
             {!isLogin && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
@@ -358,7 +358,7 @@ const handleSubmit = async (e) => {
                 </div>
               </motion.div>
             )}
-            
+
             {!isLogin && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
@@ -425,19 +425,18 @@ const handleSubmit = async (e) => {
                   <p className="text-red-400 text-sm mt-1">{errors.password}</p>
                 )}
               </div>
-              
+
               {!isLogin && (
                 <div className="mt-2 text-xs text-gray-400">
                   Password must contain: 8+ characters, uppercase, lowercase, number, special character
                 </div>
-              )}  
-               
+              )}
+
             </div>
 
             <motion.button
               type="submit"
-              disabled={isLoading || Object.keys(errors).length > 0}
-              whileHover={{ 
+              disabled={isLoading || (!isLogin && Object.keys(errors).filter(key => key !== 'general').length > 0)} whileHover={{
                 scale: 1.05,
                 boxShadow: '0 20px 40px rgba(236, 72, 153, 0.4)'
               }}
@@ -448,7 +447,7 @@ const handleSubmit = async (e) => {
               <motion.div
                 className="absolute inset-0 bg-gradient-to-r from-pink-400 via-purple-400 to-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-xl"
               />
-              
+
               <span className="relative z-10">
                 {isLoading ? (
                   <div className="flex items-center justify-center">

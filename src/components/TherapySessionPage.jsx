@@ -268,7 +268,6 @@ const TherapySessionPage = () => {
             case 'angry': return 'from-red-50 via-orange-50 to-amber-50';
             case 'surprised': return 'from-yellow-50 via-orange-50 to-pink-50';
             case 'fear': return 'from-purple-50 via-pink-50 to-indigo-50';
-            case 'disgust': return 'from-lime-50 via-green-50 to-emerald-50';
             default: return 'from-purple-50 via-blue-50 to-indigo-100';
         }
     })();
