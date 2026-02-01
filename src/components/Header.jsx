@@ -28,8 +28,8 @@ const Header = () => {
 
   return (
     <header className={`w-full z-40 transition-all duration-300 ${isTransparent
-      ? 'sticky top-0 bg-white/50 backdrop-blur-sm border-b border-transparent'
-      : 'sticky top-0 bg-white/50 backdrop-blur-sm border-b border-gray-100'
+      ? 'sticky top-0 bg-purple-900 backdrop-blur-sm shadow-md'
+      : 'sticky top-0 bg-purple-900 backdrop-blur-sm shadow-md'
       }`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="h-16 flex items-center justify-between">
@@ -38,22 +38,22 @@ const Header = () => {
               <div className="w-5 h-5 text-white">❤️</div>
             </div>
             <div className="hidden sm:block">
-              <div className="text-sm font-semibold text-purple-700">Puresoul</div>
-              <div className="text-xs text-gray-500">Therapeutic support</div>
+              <div className="text-sm font-semibold text-white">Puresoul</div>
+              <div className="text-xs text-white">Therapeutic support</div>
             </div>
           </div>
 
           <div className="flex items-center space-x-3">
             {user && (
               <>
-                <div className="hidden md:flex items-center px-3 py-1 rounded-full bg-white/10 text-gray-700 text-sm font-medium">
+                <div className="hidden md:flex items-center px-3 py-1 rounded-full bg-gray-200 text-black text-sm font-medium">
                   <User className="w-4 h-4 mr-2" />
                   <span className="truncate max-w-xs">{user.name}</span>
                 </div>
 
                 <div className="relative">
-                  <motion.button onClick={() => setOpenMenu(!openMenu)} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="p-2 rounded-md bg-white/5 hover:bg-gray-100 transition">
-                    <Menu className="w-5 h-5 text-gray-700" />
+                  <motion.button onClick={() => setOpenMenu(!openMenu)} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="p-2 rounded-md bg-white/5 hover:bg-gray-200 transition">
+                    <Menu className="w-5 h-5 text-white hover:text-black" />
                   </motion.button>
                   {openMenu && (
                     <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden z-50">

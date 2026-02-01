@@ -16,7 +16,7 @@
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
-    "express": "^5.1.0",
+    "express": "^4.21.2",
     "framer-motion": "^12.23.12",
     "groq-sdk": "^0.30.0",
     "jsonwebtoken": "^9.0.2",
@@ -24,6 +24,7 @@
     "mongodb": "^7.0.0",
     "mongoose": "^8.18.1",
     "node-fetch": "^2.7.0",
+    "openai": "^6.17.0",
     "react-router-dom": "^7.9.1"
   }
 }

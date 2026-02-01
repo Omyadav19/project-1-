@@ -9,7 +9,7 @@ import MediaPipeEmotionDetector from '../utils/mediapipeDetection.js';
 
 const EmotionDetectionPage = () => {
   const navigate = useNavigate();
-  const { user, setCurrentEmotion, addEmotionData } = useApp();
+  const { user, setCurrentEmotion, addEmotionData, apiProvider, setApiProvider } = useApp();
 
   // State for the batching and popup logic
 
@@ -235,7 +235,22 @@ const EmotionDetectionPage = () => {
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto mb-8">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-4xl font-bold bg-gradient-to-r from-pink-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent">Emotion Detection</h1>
-            <div className="flex space-x-3">
+            <div className="flex items-center space-x-3">
+              {/* API Selection Dropdown */}
+              <div className="relative">
+                <select
+                  value={apiProvider}
+                  onChange={(e) => setApiProvider(e.target.value)}
+                  className="appearance-none bg-white/10 backdrop-blur-sm border border-white/20 text-purple-200 py-2 px-4 pr-8 rounded-full text-sm leading-tight focus:outline-none focus:bg-white/20 focus:border-purple-500 transition-all cursor-pointer hover:shadow-md"
+                >
+                  <option value="groq" className="bg-slate-800 text-white">Groq (Llama 3)</option>
+                  <option value="gemini" className="bg-slate-800 text-white">Google Gemini</option>
+                  <option value="chatgpt" className="bg-slate-800 text-white">OpenAI ChatGPT</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-purple-400">
+                  <Brain className="w-4 h-4" />
+                </div>
+              </div>
               <button onClick={() => navigate('/dashboard')} className="flex items-center px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-purple-300 hover:text-white hover:bg-white/20 transition-all duration-300 border border-white/20"><Navigation className="w-5 h-5 mr-2" /> Dashboard</button>
               <button onClick={() => navigate('/mood-history')} className="flex items-center px-4 py-2 bg-white/10 backdrop-blur-sm rounded-full text-purple-300 hover:text-white hover:bg-white/20 transition-all duration-300 border border-white/20"><Navigation className="w-5 h-5 mr-2" /> History</button>
             </div>

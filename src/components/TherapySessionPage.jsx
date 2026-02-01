@@ -91,7 +91,7 @@ class TTSQueue {
 
 const TherapySessionPage = () => {
     const navigate = useNavigate();
-    const { user, addTherapySession, setSadDetectionCount, currentEmotion } = useApp();
+    const { user, addTherapySession, setSadDetectionCount, currentEmotion, apiProvider, setApiProvider } = useApp();
     const location = useLocation();
     const specialtyState = location.state || {};
     const specialtyName = specialtyState.specialtyName || 'Professional Therapy';
@@ -105,6 +105,7 @@ const TherapySessionPage = () => {
     const [userEmotionalState] = useState('');
     const [welcomeMessageSent, setWelcomeMessageSent] = useState(false);
     const messagesEndRef = useRef(null);
+    const chatContainerRef = useRef(null);
 
     const { isListening, transcript, startListening, stopListening } = useSpeechRecognition();
 
@@ -144,7 +145,7 @@ const TherapySessionPage = () => {
 
     const getTherapeuticResponse = async (userMessage, messageHistory) => {
         try {
-            const response = await fetch('http://localhost:3001/api/get-response', {
+            const response = await fetch('/api/get-response', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -152,7 +153,8 @@ const TherapySessionPage = () => {
                     messageHistory: messageHistory.slice(-6),
                     emotion: currentEmotion?.emotion || 'neutral',
                     specialty: specialtyName,
-                    specialtyPrompt
+                    specialtyPrompt,
+                    apiProvider
                 }),
             });
             if (!response.ok) {
@@ -206,8 +208,15 @@ const TherapySessionPage = () => {
     }, [user, navigate, welcomeMessageSent, ttsReady, currentEmotion, specialtyName, messages]);
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
+        // Scoped scrolling: only scroll the chat container, not the entire page
+        const timer = setTimeout(() => {
+            if (chatContainerRef.current) {
+                chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+            }
+            ttsQueueRef.current?.resume();
+        }, 100);
+        return () => clearTimeout(timer);
+    }, [messages, isTyping]);
 
     const handleSendMessage = async () => {
         if (!inputMessage.trim()) return;
@@ -278,7 +287,7 @@ const TherapySessionPage = () => {
             <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-white/90 backdrop-blur-sm border-b border-white/50 p-4 shadow-lg"
+                className="sticky top-0 z-50 bg-white/90 backdrop-blur-sm border-b border-white/50 p-4 shadow-lg"
             >
                 <div className="max-w-4xl mx-auto flex justify-between items-center">
                     <div className="flex items-center space-x-4">
@@ -295,6 +304,22 @@ const TherapySessionPage = () => {
                         <div className="hidden md:flex items-center space-x-2 bg-purple-100 px-3 py-1 rounded-full">
                             <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
                             <span className="text-sm font-medium text-purple-700 capitalize">Session Active</span>
+                        </div>
+
+                        {/* API Selection Dropdown */}
+                        <div className="relative">
+                            <select
+                                value={apiProvider}
+                                onChange={(e) => setApiProvider(e.target.value)}
+                                className="appearance-none bg-white border border-purple-200 text-gray-700 py-2 px-4 pr-8 rounded-full text-sm leading-tight focus:outline-none focus:bg-white focus:border-purple-500 transition-all cursor-pointer hover:shadow-md"
+                            >
+                                <option value="groq">Groq (Llama 3)</option>
+                                <option value="gemini">Google Gemini</option>
+                                <option value="chatgpt">OpenAI ChatGPT</option>
+                            </select>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-purple-600">
+                                <Brain className="w-4 h-4" />
+                            </div>
                         </div>
 
                         <motion.button
@@ -322,9 +347,12 @@ const TherapySessionPage = () => {
 
             {/* Enhanced Chat Area */}
             <div className="max-w-4xl mx-auto p-6">
-                <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/50 h-[65vh] flex flex-col">
+                <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/50 h-[75vh] flex flex-col">
                     {/* Messages */}
-                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    <div
+                        ref={chatContainerRef}
+                        className="flex-1 overflow-y-auto p-6 space-y-6"
+                    >
                         {/* Autoplay Warning */}
                         <AnimatePresence>
                             {ttsQueueRef.current?.isBlocked && (
@@ -343,9 +371,10 @@ const TherapySessionPage = () => {
                             {messages.map((message) => (
                                 <motion.div
                                     key={message.id}
-                                    initial={{ opacity: 0, y: 20 }}
+                                    layout
+                                    initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -20 }}
+                                    exit={{ opacity: 0 }}
                                     className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                                 >
                                     <div className={`max-w-2xl ${message.sender === 'user' ? 'order-2' : 'order-1'}`}>
@@ -383,9 +412,10 @@ const TherapySessionPage = () => {
 
                             {isTyping && (
                                 <motion.div
-                                    initial={{ opacity: 0, y: 20 }}
+                                    layout
+                                    initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -20 }}
+                                    exit={{ opacity: 0 }}
                                     className="flex justify-start"
                                 >
                                     <div className="max-w-2xl">

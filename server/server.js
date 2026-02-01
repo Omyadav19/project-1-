@@ -4,9 +4,11 @@ const express = require('express');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const cors = require('cors');   
+const cors = require('cors');
 const dotenv = require('dotenv');
-const Groq = require('groq-sdk'); 
+const Groq = require('groq-sdk');
+const OpenAI = require('openai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { validateEmail, validateUsername, validatePassword } = require('./validation');
 
 dotenv.config();
@@ -16,8 +18,17 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+// --- SERVE STATIC FILES IN PRODUCTION ---
+const path = require('path');
+const distPath = path.join(__dirname, '..', 'dist');
+
+// Serve static files from the React app build directory
+app.use(express.static(distPath));
+
 // --- 3. INITIALIZE API CLIENTS AND DATABASE ---
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY }); 
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // ---------- GROQ RETRY + FALLBACK ----------
 const GROQ_MODELS = [
@@ -82,8 +93,8 @@ async function connectWithDnsFallback() {
     connectTimeoutMS: 10000,
     serverSelectionTimeoutMS: 10000
   })
-  .then(() => console.log("✅ MongoDB connected"))
-  .catch(err => console.error("❌ MongoDB connection error:", err));
+    .then(() => console.log("✅ MongoDB connected"))
+    .catch(err => console.error("❌ MongoDB connection error:", err));
 }
 
 connectWithDnsFallback();
@@ -199,7 +210,7 @@ app.post('/api/therapy-sessions', auth, async (req, res) => {
 // CHATBOT RESPONSE ENDPOINT
 app.post('/api/get-response', async (req, res) => {
   try {
-    const { userMessage, messageHistory, emotion, specialty, specialtyPrompt } = req.body;
+    const { userMessage, messageHistory, emotion, specialty, specialtyPrompt, apiProvider = 'groq' } = req.body;
 
     // Base system prompt: concise, casual therapist voice
     const basePrompt = `You are a calm, cozy, professional therapist who speaks like a caring friend on WhatsApp: brief, warm, and practical.
@@ -211,11 +222,11 @@ app.post('/api/get-response', async (req, res) => {
 
   CRITICAL: If the user mentions suicide, self-harm, or imminent danger, respond with urgent, non-judgmental care, say their life matters, encourage contacting emergency services or trusted people immediately, provide crisis hotline suggestions, and do NOT provide methods or instructions.`;
 
-    // Specialty guidance (prefer specialtyPrompt if provided)
+    // Specialty guidance
     const specialtyInstruction = specialtyPrompt
       || (specialty ? `Focus the session on ${specialty}. Tailor your language and suggestions to ${specialty}.` : 'Provide empathetic, open-ended emotional support.');
 
-    // Mood-specific guidance (gentle modifiers)
+    // Mood-specific guidance
     const moodInstructionMap = {
       sad: 'Be extra gentle and validating; normalize feelings and encourage small supportive steps.',
       angry: 'Acknowledge the intensity; provide calming suggestions and encourage safe expression.',
@@ -226,30 +237,63 @@ app.post('/api/get-response', async (req, res) => {
     };
 
     const moodInstruction = emotion ? (moodInstructionMap[emotion] || '') : '';
-
     const systemPrompt = [basePrompt, specialtyInstruction, moodInstruction].filter(Boolean).join('\n\n');
 
-    const conversationHistory = [
-      { role: "system", content: systemPrompt },
-      ...messageHistory.map(m => ({
-        role: m.sender === 'user' ? 'user' : 'assistant',
-        content: m.text
-      })),
-      { role: "user", content: userMessage }
-    ];
+    let responseText = "";
 
-    const chatCompletion = await groqWithRetry(conversationHistory);
+    if (apiProvider === 'chatgpt') {
+      const completion = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...messageHistory.map(m => ({
+            role: m.sender === 'user' ? 'user' : 'assistant',
+            content: m.text
+          })),
+          { role: "user", content: userMessage }
+        ],
+      });
+      responseText = completion.choices[0]?.message?.content;
+    }
+    else if (apiProvider === 'gemini') {
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const chat = model.startChat({
+        history: [
+          { role: "user", parts: [{ text: systemPrompt + "\n\nUnderstood. I will act as this therapist." }] },
+          { role: "model", parts: [{ text: "I understand. I am ready to help as your therapist." }] },
+          ...messageHistory.map(m => ({
+            role: m.sender === 'user' ? 'user' : 'model',
+            parts: [{ text: m.text }]
+          })),
+        ],
+      });
+      const result = await chat.sendMessage(userMessage);
+      responseText = result.response.text();
+    }
+    else {
+      // Default: Groq
+      const conversationHistory = [
+        { role: "system", content: systemPrompt },
+        ...messageHistory.map(m => ({
+          role: m.sender === 'user' ? 'user' : 'assistant',
+          content: m.text
+        })),
+        { role: "user", content: userMessage }
+      ];
+      const chatCompletion = await groqWithRetry(conversationHistory);
+      responseText = chatCompletion.choices[0]?.message?.content;
+    }
 
-    const responseText =
-      chatCompletion.choices[0]?.message?.content ||
-      "I'm here with you. Tell me what’s going on.";
+    if (!responseText) {
+      responseText = "I'm here with you. Tell me what’s going on.";
+    }
 
     res.json({ therapistResponse: responseText });
 
   } catch (error) {
-    console.error("Groq error:", error?.message || error);
+    console.error("AI Error:", error?.message || error);
     res.status(503).json({
-      error: "AI is busy right now. Please try again in a few seconds."
+      error: "The selected AI service is currently unavailable. Please try another one."
     });
   }
 });
@@ -303,6 +347,12 @@ app.post('/api/login', async (req, res) => {
     console.error("Login error:", err);
     res.status(500).json({ message: "Login failed" });
   }
+});
+
+// --- CATCH-ALL ROUTE FOR REACT ROUTER ---
+// This must be AFTER all API routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(distPath, 'index.html'));
 });
 
 // --- 6. START SERVER ---

@@ -27,6 +27,7 @@ export const AppProvider = ({ children }) => {
   const [therapySessions, setTherapySessions] = useState([]);
   const [sadDetectionCount, setSadDetectionCount] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [apiProvider, setApiProvider] = useState('groq');
 
   const fetchHistory = useCallback(async () => {
     const token = localStorage.getItem('authToken');
@@ -35,10 +36,10 @@ export const AppProvider = ({ children }) => {
     setIsLoading(true);
     try {
       const [emotionsRes, sessionsRes] = await Promise.all([
-        fetch('http://localhost:3001/api/emotion-history', {
+        fetch('/api/emotion-history', {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch('http://localhost:3001/api/therapy-sessions', {
+        fetch('/api/therapy-sessions', {
           headers: { 'Authorization': `Bearer ${token}` }
         })
       ]);
@@ -73,7 +74,7 @@ export const AppProvider = ({ children }) => {
     if (!token) return;
 
     try {
-      const res = await fetch('http://localhost:3001/api/emotion-history', {
+      const res = await fetch('/api/emotion-history', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -95,7 +96,7 @@ export const AppProvider = ({ children }) => {
     if (!token) return;
 
     try {
-      const res = await fetch('http://localhost:3001/api/therapy-sessions', {
+      const res = await fetch('/api/therapy-sessions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -133,6 +134,8 @@ export const AppProvider = ({ children }) => {
         sadDetectionCount,
         setSadDetectionCount,
         isLoading,
+        apiProvider,
+        setApiProvider,
         refreshHistory: fetchHistory
       }}
     >
