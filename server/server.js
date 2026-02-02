@@ -324,15 +324,8 @@ app.post('/api/register', async (req, res) => {
 
 // LOGIN
 
-app.get("/api/test", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "API working fine"
-  });
-});
 
-
-app.post("/login", async (req, res) => {
+app.post("api/login", async (req, res) => {
   try {
     const { identifier, password } = req.body;
 
