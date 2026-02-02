@@ -332,7 +332,7 @@ app.get("/api/test", (req, res) => {
 });
 
 
-app.post("/api/login", async (req, res) => {
+app.post("/login", async (req, res) => {
   try {
     const { identifier, password } = req.body;
 
