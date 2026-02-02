@@ -82,7 +82,7 @@ const LoginPage = () => {
     try {
       if (isLogin) {
         // --- LOGIN API CALL ---
-        const response = await fetch('https://server-wvln.onrender.com/api/login', {
+        const response = await fetch('/api/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ identifier, password }),
