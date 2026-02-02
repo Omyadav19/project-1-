@@ -323,6 +323,15 @@ app.post('/api/register', async (req, res) => {
 });
 
 // LOGIN
+
+app.get("/api/test", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "API working fine"
+  });
+});
+
+
 app.post('https://server-wvln.onrender.com/api/login', async (req, res) => {
   try {
     const { identifier, password } = req.body;
