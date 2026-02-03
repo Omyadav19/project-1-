@@ -170,7 +170,7 @@ const EmotionDetectionPage = () => {
 
   // --- REACT LIFECYCLE HOOKS ---
   useEffect(() => {
-    if (!user) navigate('/login');
+    if (!user) navigate("https://server-wvln.onrender.com/login");
     else if (hasPermission === null) requestCameraPermission();
     return () => {
       if (stream) stream.getTracks().forEach(track => track.stop());
