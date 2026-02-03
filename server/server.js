@@ -208,7 +208,7 @@ app.post('/api/therapy-sessions', auth, async (req, res) => {
 });
 
 // CHATBOT RESPONSE ENDPOINT
-app.post('https://server-wvln.onrender.com/api/get-response', async (req, res) => {
+app.post("https://server-wvln.onrender.com/api/get-response", async (req, res) => {
   try {
     const { userMessage, messageHistory, emotion, specialty, specialtyPrompt, apiProvider = 'groq' } = req.body;
 
