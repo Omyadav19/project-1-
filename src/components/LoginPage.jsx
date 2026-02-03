@@ -108,7 +108,7 @@ const LoginPage = () => {
 
       } else {
         // --- REGISTRATION API CALL ---
-        const response = await fetch('/api/register', {
+        const response = await fetch("https://server-wvln.onrender.com/api/register", {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name, email, username, password }),
