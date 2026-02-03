@@ -145,7 +145,7 @@ const TherapySessionPage = () => {
 
     const getTherapeuticResponse = async (userMessage, messageHistory) => {
         try {
-            const response = await fetch('/api/get-response', {
+            const response = await fetch("https://server-wvln.onrender.com/api/get-response", {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
