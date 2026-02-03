@@ -301,7 +301,7 @@ app.post('/api/get-response', async (req, res) => {
 
 
 // REGISTER
-app.post('/api/register', async (req, res) => {
+app.post("/api/register", async (req, res) => {
   try {
     const { name, email, username, password } = req.body;
 
